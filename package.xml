@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mujoco</name>
+  <version>2.2.1</version>
+  <description>The mujoco_ package</description>
+  <maintainer email="hosseini@ais.uni-bonn.de">Mojtaba Hosseini</maintainer>
+  <license>GPL</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>
+

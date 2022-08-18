@@ -23,6 +23,9 @@ set(CMAKE_POLICY_DEFAULT_CMP0072 NEW)
 # Avoid BUILD_SHARED_LIBS getting overridden by an option() in ccd.
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
+# the -flto flag breaks linking with LLVM lld:
+string(REPLACE "-flto" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+
 # This line has to appear before 'PROJECT' in order to be able to disable incremental linking
 set(MSVC_INCREMENTAL_DEFAULT ON)
 
@@ -33,14 +36,16 @@ project(
   HOMEPAGE_URL "https://mujoco.org"
 )
 
+find_package(catkin REQUIRED COMPONENTS)
+
 enable_language(C)
 enable_language(CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 option(MUJOCO_BUILD_EXAMPLES "Build samples for MuJoCo" ON)
-option(MUJOCO_BUILD_TESTS "Build tests for MuJoCo" ON)
-option(MUJOCO_TEST_PYTHON_UTIL "Build and test utility libraries for Python bindings" ON)
+option(MUJOCO_BUILD_TESTS "Build tests for MuJoCo" OFF)
+option(MUJOCO_TEST_PYTHON_UTIL "Build and test utility libraries for Python bindings" OFF)
 
 if(APPLE AND MUJOCO_BUILD_EXAMPLES)
   enable_language(OBJC)
@@ -63,9 +68,20 @@ set(MUJOCO_HEADERS
     include/mujoco/mujoco.h
 )
 
+catkin_package(
+        INCLUDE_DIRS
+        include
+        sample
+        LIBRARIES
+        mujoco
+        uitools
+        CATKIN_DEPENDS
+)
+
 add_library(mujoco SHARED)
 target_include_directories(
   mujoco
+  ${catkin_INCLUDE_DIRS}
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/>
   PRIVATE src
@@ -98,6 +114,7 @@ target_link_options(
 
 target_link_libraries(
   mujoco
+  ${catkin_LIBRARIES}
   PRIVATE ccd
           lodepng
           qhullstatic_r
