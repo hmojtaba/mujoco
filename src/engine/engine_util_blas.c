@@ -99,6 +99,12 @@ void mju_addToScl3(mjtNum res[3], const mjtNum vec[3], mjtNum scl) {
   res[2] += vec[2] * scl;
 }
 
+// res += vec*scl_vec
+MJAPI void mju_addToSclExp3(mjtNum res[3], const mjtNum vec[3], const mjtNum scl_vec[3]) {
+    res[0] += vec[0] * scl_vec[0] * (1 - mju_exp(-5*vec[0]*vec[0]));
+    res[1] += vec[1] * scl_vec[1] * (1 - mju_exp(-5*vec[1]*vec[1]));
+    res[2] += vec[2] * scl_vec[2] * (1 - mju_exp(-2*vec[2]*vec[2]));
+}
 
 
 // res = vec1 + vec2*scl

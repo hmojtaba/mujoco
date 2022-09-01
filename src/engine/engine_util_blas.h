@@ -88,6 +88,9 @@ MJAPI void mju_subFrom3(mjtNum res[3], const mjtNum vec[3]);
 // res += vec*scl
 MJAPI void mju_addToScl3(mjtNum res[3], const mjtNum vec[3], mjtNum scl);
 
+// res += vec*scl_vec
+MJAPI void mju_addToSclExp3(mjtNum res[3], const mjtNum vec[3], const mjtNum scl_vec[3]);
+
 // res = vec1 + vec2*scl
 MJAPI void mju_addScl3(mjtNum res[3], const mjtNum vec1[3], const mjtNum vec2[3], mjtNum scl);
 

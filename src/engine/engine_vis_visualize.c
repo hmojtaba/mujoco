@@ -1692,8 +1692,9 @@ void mjv_updateCamera(const mjModel* m, mjData* d, mjvCamera* cam, mjvScene* scn
       }
 
       // smooth tracking of subtree com
+      const mjtNum scl_vec[3] = {0.5,0.5,0.1};
       mju_sub3(move, d->subtree_com + 3*cam->trackbodyid, cam->lookat);
-      mju_addToScl3(cam->lookat, move, 0.2);  // constant ???
+      mju_addToSclExp3(cam->lookat, move, scl_vec);
     }
 
     // compute frame
