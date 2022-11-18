@@ -33,7 +33,7 @@ void mjCopyError(char* dst, const char* src, int maxlen);
 
 
 // XML Error info
-class mjXError {
+class [[nodiscard]] mjXError {
  public:
   mjXError(const tinyxml2::XMLElement* elem = 0,
            const char* msg = 0,
@@ -46,7 +46,7 @@ class mjXError {
 
 
 // max number of attribute fields in schema (plus 3)
-#define mjXATTRNUM 35
+#define mjXATTRNUM 36
 
 
 // Custom XML file validation

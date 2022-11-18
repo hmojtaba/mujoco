@@ -35,8 +35,8 @@
   #endif
 #endif
 
-#define mjVERSION 221
-#define mjVERSIONSTRING "2.2.1"
+#define mjVERSION 230
+#define mjVERSIONSTRING "2.3.0"
 
 // names of disable flags
 const char* mjDISABLESTRING[mjNDISABLE] = {
@@ -51,7 +51,8 @@ const char* mjDISABLESTRING[mjNDISABLE] = {
   "Warmstart",
   "Filterparent",
   "Actuation",
-  "Refsafe"
+  "Refsafe",
+  "Sensor"
 };
 
 
@@ -150,6 +151,35 @@ void mj_jacBody(const mjModel* m, const mjData* d, mjtNum* jacp, mjtNum* jacr, i
 // compute body-com Jacobian
 void mj_jacBodyCom(const mjModel* m, const mjData* d, mjtNum* jacp, mjtNum* jacr, int body) {
   mj_jac(m, d, jacp, jacr, d->xipos+3*body, body);
+}
+
+
+
+// compute subtree-com Jacobian
+void mj_jacSubtreeCom(const mjModel* m, mjData* d, mjtNum* jacp, int body) {
+  int nv = m->nv;
+  mjMARKSTACK;
+  mjtNum* jacp_b = mj_stackAlloc(d, 3*nv);
+
+  // clear output
+  mju_zero(jacp, 3*nv);
+
+  // forward pass starting from body
+  for (int b=body; b<m->nbody; b++) {
+    // end of body subtree, break from the loop
+    if (b > body && m->body_parentid[b] < body) {
+      break;
+    }
+
+    // b is in the body subtree, add mass-weighted Jacobian into jacp
+    mj_jac(m, d, jacp_b, NULL, d->xipos+3*b, b);
+    mju_addToScl(jacp, jacp_b, m->body_mass[b], 3*nv);
+  }
+
+  // normalize by subtree mass
+  mju_scl(jacp, jacp, 1/m->body_subtreemass[body], 3*nv);
+
+  mjFREESTACK;
 }
 
 
@@ -410,107 +440,90 @@ static int _getnumadr(const mjModel* m, mjtObj type, int** padr) {
   case mjOBJ_XBODY:
     *padr = m->name_bodyadr;
     return m->nbody;
-    break;
 
   case mjOBJ_JOINT:
     *padr = m->name_jntadr;
     return m->njnt;
-    break;
 
   case mjOBJ_GEOM:
     *padr = m->name_geomadr;
     return m->ngeom;
-    break;
 
   case mjOBJ_SITE:
     *padr = m->name_siteadr;
     return m->nsite;
-    break;
 
   case mjOBJ_CAMERA:
     *padr = m->name_camadr;
     return m->ncam;
-    break;
 
   case mjOBJ_LIGHT:
     *padr = m->name_lightadr;
     return m->nlight;
-    break;
 
   case mjOBJ_MESH:
     *padr = m->name_meshadr;
     return m->nmesh;
-    break;
 
   case mjOBJ_SKIN:
     *padr = m->name_skinadr;
     return m->nskin;
-    break;
 
   case mjOBJ_HFIELD:
     *padr = m->name_hfieldadr;
     return m->nhfield;
-    break;
 
   case mjOBJ_TEXTURE:
     *padr = m->name_texadr;
     return m->ntex;
-    break;
 
   case mjOBJ_MATERIAL:
     *padr = m->name_matadr;
     return m->nmat;
-    break;
 
   case mjOBJ_PAIR:
     *padr = m->name_pairadr;
     return m->npair;
-    break;
 
   case mjOBJ_EXCLUDE:
     *padr = m->name_excludeadr;
     return m->nexclude;
-    break;
 
   case mjOBJ_EQUALITY:
     *padr = m->name_eqadr;
     return m->neq;
-    break;
 
   case mjOBJ_TENDON:
     *padr = m->name_tendonadr;
     return m->ntendon;
-    break;
 
   case mjOBJ_ACTUATOR:
     *padr = m->name_actuatoradr;
     return m->nu;
-    break;
 
   case mjOBJ_SENSOR:
     *padr = m->name_sensoradr;
     return m->nsensor;
-    break;
 
   case mjOBJ_NUMERIC:
     *padr = m->name_numericadr;
     return m->nnumeric;
-    break;
 
   case mjOBJ_TEXT:
     *padr = m->name_textadr;
     return m->ntext;
-    break;
 
   case mjOBJ_TUPLE:
     *padr = m->name_tupleadr;
     return m->ntuple;
-    break;
 
   case mjOBJ_KEY:
     *padr = m->name_keyadr;
     return m->nkey;
-    break;
+
+  case mjOBJ_PLUGIN:
+    *padr = m->name_pluginadr;
+    return m->nplugin;
 
   default:
     *padr = 0;

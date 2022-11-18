@@ -30,7 +30,7 @@ option(MUJOCO_SAMPLES_USE_SYSTEM_MUJOCO "Use installed MuJoCo version." OFF)
 option(MUJOCO_SAMPLES_USE_SYSTEM_GLFW "Use installed GLFW version." OFF)
 
 set(MUJOCO_DEP_VERSION_glfw
-    7d5a16ce714f0b5f4efa3262de22e4d948851525 # 3.3.6
+    7482de6071d21db77a7236155da44c172a7f6c9e # 3.3.8
     CACHE STRING "Version of `glfw` to be fetched."
 )
 mark_as_advanced(MUJOCO_DEP_VERSION_glfw)
@@ -58,8 +58,10 @@ findorfetch(
   EXCLUDE_FROM_ALL
 )
 
-option(MUJOCO_SAMPLES_STATIC_GLFW "Link MuJoCo sample apps against GLFW statically." ON)
-if(MUJOCO_SAMPLES_STATIC_GLFW)
+option(MUJOCO_EXTRAS_STATIC_GLFW
+       "Link MuJoCo sample apps and simulate libraries against GLFW statically." ON
+)
+if(MUJOCO_EXTRAS_STATIC_GLFW)
   set(BUILD_SHARED_LIBS_OLD ${BUILD_SHARED_LIBS})
   set(BUILD_SHARED_LIBS
       OFF
@@ -88,7 +90,7 @@ findorfetch(
   EXCLUDE_FROM_ALL
 )
 
-if(MUJOCO_SAMPLES_STATIC_GLFW)
+if(MUJOCO_EXTRAS_STATIC_GLFW)
   set(BUILD_SHARED_LIBS
       ${BUILD_SHARED_LIBS_OLD}
       CACHE BOOL "Build SHARED libraries" FORCE

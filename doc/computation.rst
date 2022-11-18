@@ -232,7 +232,7 @@ description of the general framework by summarizing how the above quantities up 
    a way that preserves sparsity. When a quantity of the form :math:`M^{-1} x` is needed later, it is computed via
    sparse back-substitution.
 
-Before any of these computations we apply forward kinematics, which compute the global position and orientation of all
+Before any of these computations we apply forward kinematics, which computes the global position and orientation of all
 spatial objects as well as the joint axes. While it is often recommended to apply RNE and CRB in local coordinates, here
 we are setting the stage for collision detection which is done in global coordinates, thus RNE and CRB are also
 implemented in global coordinates. Nevertheless, to improve floating point accuracy, we represent the data for each
@@ -255,13 +255,42 @@ These three components of an actuator - transmission, activation dynamics, and f
 actuator works. The user can set them independently for maximum flexibility, or use :ref:`Actuator shortcuts
 <CActuator>` which instantiate common actuator types.
 
+.. _geTransmission:
+
 Transmission
-   Each actuator has a scalar length :math:`l_i(q)` defined by the type of transmission and its parameters. The gradient
-   :math:`\nabla l_i` is an :math:`n_V`-dimensional column vector of moment arms. It determines the mapping from scalar
-   actuator force to joint force. The transmission properties are determined by the MuJoCo object to which the actuator
-   is attached; the possible attachment object types are joint, tendon, site and slider-crank. The latter can also be
-   modeled explicitly by creating MuJoCo bodies and coupling them with equality constraints to the rest of the system,
-   but that would be less efficient.
+~~~~~~~~~~~~
+
+Each actuator has a scalar length :math:`l_i(q)` defined by the type of transmission and its parameters. The gradient
+:math:`\nabla l_i` is an :math:`n_V`-dimensional vector of moment arms. It determines the mapping from scalar
+actuator force to joint force. The transmission properties are determined by the MuJoCo object to which the actuator
+is attached; the possible attachment object types are :at:`joint`, :at:`tendon`, :at:`jointinparent`,
+:at:`slider-crank`, :at:`site`, and :at:`body`.
+
+   The :at:`joint` and :at:`tendon` transmission types act as expected and correspond to the actuator applying forces or
+   torques to the target object. Ball joints are special, see the :at:`joint` documentation in
+   :ref:`actuator<actuator-general>` reference for more details.
+
+   The :at:`jointinparent` transmission is unique to ball and free joint and asserts that rotation should be measured
+   in the parent rather than child frame.
+
+   :at:`slider-crank` `transmissions <https://en.wikipedia.org/wiki/Slider-crank_linkage>`_ transform a linear force to
+   a torque, as in a piston-driven combustion engine. `This model
+   <https://github.com/deepmind/mujoco/tree/main/model/slider_crank>`_ contains pedagogical examples. Slider-cranks can
+   also be modeled explicitly by creating MuJoCo bodies and coupling them with equality constraints to the rest of the
+   system, but that would be less efficient.
+
+   :at:`site` transmission (without a :at:`refsite`, see below) and :at:`body` transmission targets have a fixed zero
+   length :math:`l_i(q) = 0`. They can therefore not be used to maintain a desired length, but can be used to apply
+   forces. Site transmissions correspond to applying a Cartsian force/torque at the site, and are useful for modeling
+   jets and propellors. :el:`body` transmissions correspond to applying forces at contact points belonging to a body, in
+   order to model vacuum grippers and biomechanical adhesive appendages. For more information about adhesion, see the
+   :ref:`adhesion<actuator-adhesion>` actuator documentation.
+
+   If a :at:`site` transmission target is defined with the optional :at:`refsite` attribute, forces and torques are
+   applied in the frame of the reference site rather than the the site's own frame. If a reference site is defined then
+   the length of the actuator is nonzero and corresponds to the pose difference of the two sites. This length can then
+   be controlled with a :el:`position` actuator, enabling Cartesian end-effector control. See the :at:`refsite`
+   documentation in :ref:`actuator<actuator-general>` reference for more details.
 
 Activation dynamics
    Some actuators such as pneumatic and hydraulic cylinders as well as biological muscles have an internal state called
@@ -333,9 +362,9 @@ with MuJoCo's operation as long as such user forces depend only on position and 
 MuJoCo can compute two types of passive forces: spring-dampers in joints and tendons, and fluid dynamics. When Euler
 integration is used, joint damping is integrated implicitly (by modifying the inertia matrix internally) which
 significantly increases stability. Thus, even though damping can be alternatively modeled as an actuator property, it is
-better to model it as a joint property. Note also the XML :ref:`joint <joint>` attribute springdamper which automates
-the creation of mass-spring-dampers with desired time constants and damping ratios; in that case the compiler computes
-the stiffness and damping coefficients of the joint by taking the joint inertia into account.
+better to model it as a joint property. Note also the XML :ref:`joint <body-joint>` attribute springdamper which
+automates the creation of mass-spring-dampers with desired time constants and damping ratios; in that case the compiler
+computes the stiffness and damping coefficients of the joint by taking the joint inertia into account.
 
 Proper simulation of fluid dynamics is beyond the scope of MuJoCo, and would be too slow for the applications we aim to
 facilitate. Nevertheless we provide a phenomenological model which is sufficient for simulating behaviors such as flying
@@ -545,11 +574,11 @@ These input fields are set by the user and affect the physics simulation, but ar
 
   Controls: ``ctrl``
     Controls are defined by the :ref:`actuator<actuator>` section of the XML. ``mjData.ctrl`` values either produce
-    generalized forces directly (stateless actuators), or affects the actuator activations in ``mjData.act``, which then
+    generalized forces directly (stateless actuators), or affect the actuator activations in ``mjData.act``, which then
     produce forces.
 
   Auxillary Controls: ``qfrc_applied`` and ``xfrc_applied``
-    | ``mjData.qfrc_applied`` are directly applied generalised forces.
+    | ``mjData.qfrc_applied`` are directly applied generalized forces.
     | ``mjData.xfrc_applied`` are Cartesian wrenches applied to the CoM of individual bodies. This field is used for
       example, by the :ref:`native viewer<saSimulate>` to apply mouse perturbations.
     | Note that the effects of ``qfrc_applied`` and ``xfrc_applied`` can usually be recreated by appropriate actuator
@@ -575,7 +604,7 @@ Warmstart accelerations
     the number of iterations required for convergence. Note however that the default Newton solver converges so quickly
     (usually 2-3 iterations), that warmstarts often have no effect on speed and can be disabled.
 
-    Different warmstarts have no preceptible effect on the dynamics but should be saved if perfect numerical
+    Different warmstarts have no perceptible effect on the dynamics but should be saved if perfect numerical
     reproducibility is required when loading a non-initial state. Note that even though their effect on physics is
     negligible, many physical systems will accumulate small differences  `exponentially
     <https://en.wikipedia.org/wiki/Lyapunov_exponent>`__ when time-stepping, quickly leading to divergent trajectories
@@ -677,20 +706,14 @@ dimensionality of the constraint residual in each case.
    linear combination of scalar joint positions, or a minimal-length string wrapping around spatial obstacles. Unlike
    joints whose positions in model configuration ``mjModel.qpos0`` can be read directly from the position vector, the
    computation of tendon lengths is less trivial. This is why the "resting lengths" of all tendons are computed by the
-   compiler and stored in ``mjModel``. In general, all field of ``mjModel`` whose names end with 0 are quantities
+   compiler and stored in ``mjModel``. In general, all fields of ``mjModel`` whose names end with 0 are quantities
    computed by the compiler in the initial model configuration ``mjModel.qpos0``.
 
 ``distance`` : 1
-   In its default form, this constraint forces two geoms to always touch each other - as if they are magnets but without
-   poles. The point of contact is not specified, so the two geoms are free to slide and rotate relative to each other.
-   The scalar residual is computed by using the collision detector in a special mode, where it returns the nearest
-   distance between the geoms even when they do not collide. A target value is then subtracted from this nearest
-   distance. By default the target value is 0, but we could for example create a distance constraint forcing the two
-   geom surfaces to remain 1 cm apart at all times. The specific reason we introduced this constraint was to estimate
-   the position and orientation of a body from motion capture markers attached to its surface, without knowing where
-   exactly the markers are attached. In that case the physics simulation ends up solving the estimation problem for us.
-   This could more generally be used when an object is supposed to slide over a surface and remain in contact with it;
-   for example the scapula in biomechanical models of the arm can be modeled as such a surface.
+
+   .. attention::
+      Distance equality constraints were removed in MuJoCo version 2.2.2. If you are using an earlier version, please
+      switch to the corresponding version of the documentation.
 
 .. _coFriction:
 
@@ -709,7 +732,7 @@ with it; so we formally set the corresponding components of :math:`r(q)` to zero
 constraint solver formulation needs to be extended in an unusual way to incorporate this constraint. Nevertheless the
 velocity of the affected joint or tendon acts as a velocity "residual" - because the effect of the constraint is to
 reduce this velocity and ideally keep it at zero. Thus the corresponding block in the constraint Jacobian is simply the
-Jacobian of the joint position (or tendon length) with respect to :math:`q`. For scalar joints this is a vector of 0's
+Jacobian of the joint position (or tendon length) with respect to :math:`q`. For scalar joints this is a vector of 0s
 with a 1 at the joint address. For tendons this is known as the moment arm vector.
 
 ``joint`` : 1, 3 or 6
@@ -1372,16 +1395,16 @@ checked in detail. The decision process involves two stages: generation and filt
 Generation
    First we generate a list of candidate geom pairs in one of two ways: "pair" or "dynamic". The user can also specify
    "all" which merges both sources (and is the default). This is done via the setting ``mjModel.opt.collision``. "Pair"
-   refers to an explicit list of geom pairs defined with the :ref:`pair <pair>` element in MJCF. It gives the user full
-   control, however it is a static mechanism (independent of the spatial arrangement of the geoms at runtime) and can be
-   tedious for large models. It is normally used to supplement the output of the "dynamic" mechanism. Dynamic generation
-   works with bodies rather than geoms; when a body pair is included this means that all geoms attached to one body can
-   collide with all geoms attached to the other body. The body pairs are generated via broad-phase collision detection
-   based on a modified sweep-and-prune algorithm. The modification is that the axis for sorting is chosen as the
-   principal eigenvector of the covariance matrix of all geom centers - which maximizes the spread. If broad-phase
-   collision detection is disabled by the user, all body pairs are included in this step.
+   refers to an explicit list of geom pairs defined with the :ref:`pair <contact-pair>` element in MJCF. It gives the
+   user full control, however it is a static mechanism (independent of the spatial arrangement of the geoms at runtime)
+   and can be tedious for large models. It is normally used to supplement the output of the "dynamic" mechanism. Dynamic
+   generation works with bodies rather than geoms; when a body pair is included this means that all geoms attached to
+   one body can collide with all geoms attached to the other body. The body pairs are generated via broad-phase
+   collision detection based on a modified sweep-and-prune algorithm. The modification is that the axis for sorting is
+   chosen as the principal eigenvector of the covariance matrix of all geom centers - which maximizes the spread. If
+   broad-phase collision detection is disabled by the user, all body pairs are included in this step.
 
-   Finally, the user can explicitly exclude certain body pairs using the :ref:`exclude <exclude>` element
+   Finally, the user can explicitly exclude certain body pairs using the :ref:`exclude <contact-exclude>` element
    in MJCF. Exclusion is applied when "dynamic" or "all" are selected, but not when "pair" is selected. At the end of
    this step we have a list of geoms pairs that is typically much smaller than :math:`n (n-1)/2`, but can still be
    pruned further before detailed collision checking.
@@ -1458,14 +1481,14 @@ The top-level function :ref:`mj_step` invokes the sequence of computations below
    cameras and lights. It also normalizes all quaternions, just in case.
 #. Compute the body inertias and joint axes, in global frames centered at the centers of mass of the corresponding
    kinematic subtrees (to improve floating-point accuracy).
-#. Compute the tendon lengths and moment arms. This includes the computation of minimal-length paths for spatial
-   tendons.
 #. Compute the actuator lengths and moment arms.
 #. Compute the composite rigid body inertias and construct the joint-space inertia matrix.
 #. Compute the sparse factorization of the joint-space inertia matrix.
 #. Construct the list of active contacts. This includes both broad-phase and near-phase collision detection.
 #. Construct the constraint Jacobian and compute the constraint residuals.
 #. Compute the matrices and vectors needed by the constraint solvers.
+#. Compute the tendon lengths and moment arms. This includes the computation of minimal-length paths for spatial
+   tendons.
 #. Compute sensor data that only depends on position, and the potential energy if enabled.
 #. Compute the tendon and actuator velocities.
 #. Compute the body velocities and rates of change of the joint axes, again in the global coordinate frames centered at
@@ -1519,14 +1542,14 @@ The top-level function :ref:`mj_inverse` invokes the following sequence of compu
 Derivatives
 -----------
 
-MuJoCo's entire computational pipline and uniquely -- its contraint solver -- are analytically differentiable. Writing
+MuJoCo's entire computational pipline and uniquely -- its constraint solver -- are analytically differentiable. Writing
 efficient implementations of these derivatives is a long term goal of the development team. Analytic derivatives of the
 smooth dynamics with respect to velocity are already in place and power the :ref:`implicit integrator<geIntegration>`.
 
 The function ``mjd_transitionFD`` computes state-transition and control-transition Jacobians. Given any valid MuJoCo
 model ``mjModel* m`` with an initial :ref:`simulation state<geState>` in ``mjData* d``,
 
-- let :math:`x` denote the *physics state* of the simulation at time :math:`t` -- the concatenation of positions,
+- Let :math:`x` denote the *physics state* of the simulation at time :math:`t` -- the concatenation of positions,
   velocities and actuator states ``[d->qpos; d->qvel; d->act]``.
 - Let :math:`u` denote the vector of controls at time :math:`t`, corresponding to ``d->ctrl``.
 - Let :math:`y` denote the physical state of the simulation at time :math:`t+h`, where :math:`h` corresponds to

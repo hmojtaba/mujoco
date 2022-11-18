@@ -17,6 +17,7 @@ on:
 jobs:
   mujoco:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
@@ -25,6 +26,39 @@ jobs:
               -G Ninja
               -DCMAKE_C_COMPILER:STRING=gcc-11
               -DCMAKE_CXX_COMPILER:STRING=g++-11
+              -DCMAKE_EXE_LINKER_FLAGS:STRING=-Wl,--no-as-needed
+            tmpdir: "/tmp"
+          - os: ubuntu-20.04
+            additional_label: "with GCC 10"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=gcc-10
+              -DCMAKE_CXX_COMPILER:STRING=g++-10
+              -DCMAKE_EXE_LINKER_FLAGS:STRING=-Wl,--no-as-needed
+            tmpdir: "/tmp"
+          - os: ubuntu-20.04
+            additional_label: "with GCC 9"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=gcc-9
+              -DCMAKE_CXX_COMPILER:STRING=g++-9
+              -DCMAKE_EXE_LINKER_FLAGS:STRING=-Wl,--no-as-needed
+            tmpdir: "/tmp"
+          - os: ubuntu-22.04
+            additional_label: "with Clang 14"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=clang-14
+              -DCMAKE_CXX_COMPILER:STRING=clang++-14
+              -DMUJOCO_HARDEN:BOOL=ON
+            tmpdir: "/tmp"
+          - os: ubuntu-22.04
+            additional_label: "with Clang 13"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=clang-13
+              -DCMAKE_CXX_COMPILER:STRING=clang++-13
+              -DMUJOCO_HARDEN:BOOL=ON
             tmpdir: "/tmp"
           - os: ubuntu-22.04
             additional_label: "with Clang 12"
@@ -32,6 +66,22 @@ jobs:
               -G Ninja
               -DCMAKE_C_COMPILER:STRING=clang-12
               -DCMAKE_CXX_COMPILER:STRING=clang++-12
+              -DMUJOCO_HARDEN:BOOL=ON
+            tmpdir: "/tmp"
+          - os: ubuntu-20.04
+            additional_label: "with Clang 11"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=clang-11
+              -DCMAKE_CXX_COMPILER:STRING=clang++-11
+              -DMUJOCO_HARDEN:BOOL=ON
+            tmpdir: "/tmp"
+          - os: ubuntu-20.04
+            additional_label: "with Clang 10"
+            cmake_args: >-
+              -G Ninja
+              -DCMAKE_C_COMPILER:STRING=clang-10
+              -DCMAKE_CXX_COMPILER:STRING=clang++-10
               -DMUJOCO_HARDEN:BOOL=ON
             tmpdir: "/tmp"
           - os: macos-12
@@ -51,7 +101,7 @@ jobs:
     - name: Prepare Linux
       if: ${{ runner.os == 'Linux' }}
       run: >
-        sudo apt-get install
+        sudo apt-get update && sudo apt-get install
         libgl1-mesa-dev
         libxinerama-dev
         libxcursor-dev
@@ -92,10 +142,20 @@ jobs:
       run: cmake --build . --config=Release ${{ matrix.cmake_build_args }}
     - name: Test MuJoCo
       working-directory: build
-      run: ctest -C Release .
+      run: ctest -C Release --output-on-failure .
     - name: Install MuJoCo
       working-directory: build
       run: cmake --install .
+    - name: Copy plugins (POSIX)
+      if: ${{ runner.os != 'Windows' }}
+      working-directory: build
+      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/plugin &&
+           cp lib/libcable.* ${{ matrix.tmpdir }}/mujoco_install/plugin
+    - name: Copy plugins (Windows)
+      if: ${{ runner.os == 'Windows' }}
+      working-directory: build
+      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/plugin &&
+           cp bin/Release/cable.dll ${{ matrix.tmpdir }}/mujoco_install/plugin
     - name: Configure samples
       working-directory: sample
       run: >
@@ -107,6 +167,18 @@ jobs:
         ${{ matrix.cmake_args }}
     - name: Build samples
       working-directory: sample/build
+      run: cmake --build . --config=Release ${{ matrix.cmake_build_args }}
+    - name: Configure simulate
+      working-directory: simulate
+      run: >
+        mkdir build &&
+        cd build &&
+        cmake ..
+        -DCMAKE_BUILD_TYPE:STRING=Release
+        -Dmujoco_ROOT:STRING=${{ matrix.tmpdir }}/mujoco_install
+        ${{ matrix.cmake_args }}
+    - name: Build simulate
+      working-directory: simulate/build
       run: cmake --build . --config=Release ${{ matrix.cmake_build_args }}
     - name: Make Python sdist
       shell: bash
@@ -121,6 +193,7 @@ jobs:
       run: >
         source ${{ matrix.tmpdir }}/venv/bin/activate &&
         MUJOCO_PATH="${{ matrix.tmpdir }}/mujoco_install"
+        MUJOCO_PLUGIN_PATH="${{ matrix.tmpdir }}/mujoco_install/plugin"
         MUJOCO_CMAKE_ARGS="-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=OFF ${{ matrix.cmake_args }}"
         pip wheel -v --no-deps mujoco-*.tar.gz
     - name: Install Python bindings

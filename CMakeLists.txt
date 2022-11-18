@@ -31,7 +31,7 @@ set(MSVC_INCREMENTAL_DEFAULT ON)
 
 project(
   mujoco
-  VERSION 2.2.1
+  VERSION 2.3.0
   DESCRIPTION "MuJoCo Physics Simulator"
   HOMEPAGE_URL "https://mujoco.org"
 )
@@ -44,10 +44,12 @@ enable_language(CXX)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 option(MUJOCO_BUILD_EXAMPLES "Build samples for MuJoCo" ON)
+
+option(MUJOCO_BUILD_SIMULATE "Build simulate library for MuJoCo" ON)
 option(MUJOCO_BUILD_TESTS "Build tests for MuJoCo" OFF)
 option(MUJOCO_TEST_PYTHON_UTIL "Build and test utility libraries for Python bindings" OFF)
 
-if(APPLE AND MUJOCO_BUILD_EXAMPLES)
+if(APPLE AND (MUJOCO_BUILD_EXAMPLES OR MUJOCO_BUILD_SIMULATE))
   enable_language(OBJC)
   enable_language(OBJCXX)
 endif()
@@ -60,6 +62,7 @@ set(MUJOCO_HEADERS
     include/mujoco/mjdata.h
     include/mujoco/mjexport.h
     include/mujoco/mjmodel.h
+    include/mujoco/mjplugin.h
     include/mujoco/mjrender.h
     include/mujoco/mjtnum.h
     include/mujoco/mjui.h
@@ -67,6 +70,7 @@ set(MUJOCO_HEADERS
     include/mujoco/mjxmacro.h
     include/mujoco/mujoco.h
 )
+
 
 catkin_package(
         INCLUDE_DIRS
@@ -78,7 +82,16 @@ catkin_package(
         CATKIN_DEPENDS
 )
 
-add_library(mujoco SHARED)
+
+# Add metadata to mujoco.dll when building on Windows.
+if(WIN32)
+  set(MUJOCO_RESOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/dist/mujoco.rc)
+else()
+  set(MUJOCO_RESOURCE_FILES "")
+endif()
+
+add_library(mujoco SHARED ${MUJOCO_RESOURCE_FILES})
+
 target_include_directories(
   mujoco
   ${catkin_INCLUDE_DIRS}
@@ -87,6 +100,7 @@ target_include_directories(
   PRIVATE src
 )
 
+add_subdirectory(plugin/elasticity)
 add_subdirectory(src/engine)
 add_subdirectory(src/user)
 add_subdirectory(src/xml)
@@ -168,6 +182,13 @@ endif()
 add_library(mujoco::mujoco ALIAS mujoco)
 
 add_subdirectory(model)
+
+# `simulate` defines a macro, embed_in_bundle, that's used by `sample`, so that
+# subdirectory needs to be added first.
+# TODO: Remove this order dependency.
+if(MUJOCO_BUILD_SIMULATE)
+  add_subdirectory(simulate)
+endif()
 
 if(MUJOCO_BUILD_EXAMPLES)
   add_subdirectory(sample)
