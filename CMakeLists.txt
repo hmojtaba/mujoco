@@ -76,9 +76,10 @@ catkin_package(
         INCLUDE_DIRS
         include
         sample
+        simulate
         LIBRARIES
         mujoco
-        uitools
+        libsimulate
         CATKIN_DEPENDS
 )
 
