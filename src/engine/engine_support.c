@@ -35,8 +35,8 @@
   #endif
 #endif
 
-#define mjVERSION 230
-#define mjVERSIONSTRING "2.3.0"
+#define mjVERSION 231
+#define mjVERSIONSTRING "2.3.1"
 
 // names of disable flags
 const char* mjDISABLESTRING[mjNDISABLE] = {
@@ -917,7 +917,7 @@ void mj_makeMSparse(const mjModel* m, mjData* d, int* rownnz, int* rowadr, int* 
     }
   }
 
-  mjFREESTACK
+  mjFREESTACK;
 }
 
 
@@ -952,7 +952,7 @@ void mj_setMSparse(const mjModel* m, mjData* d, mjtNum* dst,
     }
   }
 
-  mjFREESTACK
+  mjFREESTACK;
 }
 
 

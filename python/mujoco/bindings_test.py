@@ -128,6 +128,10 @@ class MuJoCoBindingsTest(parameterized.TestCase):
     np.testing.assert_array_equal(
         qpos_ref, [0.789]*len(self.data.qpos))
 
+  # This test is disabled on PyPy as it uses sys.getrefcount
+  # However PyPy is not officially supported by MuJoCo
+  @absltest.skipIf(sys.implementation.name == 'pypy',
+                   reason='requires sys.getrefcount')
   def test_array_keeps_struct_alive(self):
     model = mujoco.MjModel.from_xml_string(TEST_XML)
     qpos0 = model.qpos0
@@ -962,6 +966,10 @@ Euler integrator, semi-implicit in velocity.
     self.assertEqual(sensor_callback.count, 1)
     self.assertEqual(data_with_sensor.sensordata[0], 17)
 
+  # This test is disabled on PyPy as it uses sys.getrefcount
+  # However PyPy is not officially supported by MuJoCo
+  @absltest.skipIf(sys.implementation.name == 'pypy',
+                   reason='requires sys.getrefcount')
   def test_mjcb_control_not_leak_memory(self):
     model_instances = []
     data_instances = []
@@ -1048,6 +1056,27 @@ Euler integrator, semi-implicit in velocity.
     upper = np.ones((n,))
     rank = mujoco.mju_boxQP(res, r, index, h, g, lower, upper)
     self.assertGreater(rank, -1)
+
+  def test_mju_fill(self):
+    res = np.empty(3, np.float64)
+    mujoco.mju_fill(res, 1.5)
+    np.testing.assert_array_equal(res, np.full(3, 1.5))
+
+  def test_mju_eye(self):
+    eye4 = np.empty((4, 4), np.float64)
+    mujoco.mju_eye(eye4)
+    np.testing.assert_array_equal(eye4, np.eye(4))
+
+  def test_mju_symmetrize(self):
+    mat = np.linspace(0, 1, 16).reshape(4, 4)
+    res = np.empty((4, 4), np.float64)
+    mujoco.mju_symmetrize(res, mat)
+    np.testing.assert_array_equal(res, 0.5*(mat + mat.T))
+
+  def test_mju_clip(self):
+    self.assertEqual(mujoco.mju_clip(1.5, 1.0, 2.0), 1.5)
+    self.assertEqual(mujoco.mju_clip(1.5, 2.0, 3.0), 2.0)
+    self.assertEqual(mujoco.mju_clip(1.5, 0.0, 1.0), 1.0)
 
   def test_mju_mul_vec_mat_vec(self):
     vec1 = np.array([1., 2., 3.])

@@ -14,7 +14,7 @@
 
 // Tests for engine/engine_support.c.
 
-#include <string_view>
+#include <string>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -26,6 +26,8 @@ namespace mujoco {
 namespace {
 
 using ::testing::DoubleNear;
+using ::testing::ContainsRegex;
+using ::testing::MatchesRegex;
 using JacobianTest = MujocoTest;
 static const mjtNum max_abs_err = std::numeric_limits<float>::epsilon();
 
@@ -155,14 +157,17 @@ TEST_F(JacobianTest, SubtreeJacNoInternalAcc) {
 
 using VersionTest = MujocoTest;
 
-const char *const kExpectedVersionString = "2.3.0";
-
 TEST_F(VersionTest, MjVersion) {
   EXPECT_EQ(mj_version(), mjVERSION_HEADER);
 }
 
 TEST_F(VersionTest, MjVersionString) {
-  EXPECT_EQ(std::string_view(mj_versionString()), kExpectedVersionString);
+#if GTEST_USES_SIMPLE_RE == 1
+  auto regex_matcher = ContainsRegex("^\\d+\\.\\d+\\.\\d+");
+#else
+  auto regex_matcher = MatchesRegex("^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9a-z]+)?$");
+#endif
+  EXPECT_THAT(std::string(mj_versionString()), regex_matcher);
 }
 
 }  // namespace

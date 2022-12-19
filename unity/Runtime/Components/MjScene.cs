@@ -62,6 +62,8 @@ public class MjScene : MonoBehaviour {
       return _instance;
     }
   }
+  
+  public static bool InstanceExists { get => _instance != null; }
 
   public void Awake() {
     if (_instance == null) {
@@ -76,6 +78,10 @@ public class MjScene : MonoBehaviour {
 
   private List<MjComponent> _orderedComponents;
 
+  public EventHandler preUpdateEvent;
+  public EventHandler<MjStepArgs> ctrlCallback;
+  public EventHandler postUpdateEvent;
+
   protected unsafe void Start() {
     CreateScene();
   }
@@ -85,7 +91,9 @@ public class MjScene : MonoBehaviour {
   }
 
   protected unsafe void FixedUpdate() {
+    preUpdateEvent?.Invoke(this, EventArgs.Empty);
     StepScene();
+    postUpdateEvent?.Invoke(this, EventArgs.Empty);
   }
 
   public bool SceneRecreationAtLateUpdateRequested = false;
@@ -314,7 +322,14 @@ public class MjScene : MonoBehaviour {
     }
     Profiler.BeginSample("MjStep");
     Profiler.BeginSample("MjStep.mj_step");
-    MujocoLib.mj_step(Model, Data);
+    if (ctrlCallback != null){
+      MujocoLib.mj_step1(Model, Data);
+      ctrlCallback?.Invoke(this, new MjStepArgs(Model, Data));
+      MujocoLib.mj_step2(Model, Data);
+    }
+    else {
+      MujocoLib.mj_step(Model, Data);
+    }
     Profiler.EndSample(); // MjStep.mj_step
     CheckForPhysicsException();
 
@@ -386,12 +401,17 @@ public class MjScene : MonoBehaviour {
     MjRoot.AppendChild(GenerateMjcfSection(
         doc, components.Where(component => component is MjBaseConstraint), "equality"));
 
-    MjRoot.AppendChild(GenerateMjcfSection(
-        doc, components.Where(component => component is MjActuator), "actuator"));
+    MjRoot.AppendChild(
+        GenerateMjcfSection(doc,
+                            components.Where(component => component is MjActuator)
+                                .OrderBy(component => component.transform.GetSiblingIndex()),
+                            "actuator"));
 
-    MjRoot.AppendChild(GenerateMjcfSection(
-        doc, components.Where(component => component is MjBaseSensor), "sensor"));
-
+    MjRoot.AppendChild(
+        GenerateMjcfSection(doc,
+                            components.Where(component => component is MjBaseSensor)
+                                .OrderBy(component => component.transform.GetSiblingIndex()),
+                            "sensor"));
     // Generate the Mjcf of the runtime dependencies added to the context.
     _generationContext.GenerateMjcf(MjRoot);
     return doc;
@@ -447,5 +467,18 @@ public class MjScene : MonoBehaviour {
       Debug.LogWarning("Failed to save Xml to a file: " + ex.ToString(), this);
     }
   }
+
+
 }
+
+  public class MjStepArgs : EventArgs
+  {
+    public unsafe MjStepArgs(MujocoLib.mjModel_* model, MujocoLib.mjData_* data){
+      this.model = model; 
+      this.data = data;
+    }
+    public readonly unsafe MujocoLib.mjModel_* model;
+    public readonly unsafe MujocoLib.mjData_* data;
+  }
+
 }

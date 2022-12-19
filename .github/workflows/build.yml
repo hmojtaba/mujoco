@@ -11,8 +11,12 @@ name: build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "doc/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "doc/**"
 
 jobs:
   mujoco:
@@ -117,6 +121,7 @@ jobs:
     - name: Prepare Python
       shell: bash
       run: |
+        repo="${PWD}"
         cd ${{ matrix.tmpdir }}
         python -m venv venv
         if [[ $RUNNER_OS == "Windows" ]]; then
@@ -126,8 +131,7 @@ jobs:
         ln -s ../Scripts/activate venv/bin/activate
         fi
         source venv/bin/activate
-        python -m pip install --upgrade pip
-        pip install pytest wheel
+        python -m pip install --upgrade --require-hashes -r "${repo}/python/build_requirements.txt"
     - name: Configure MuJoCo
       run: >
         mkdir build &&
@@ -149,13 +153,13 @@ jobs:
     - name: Copy plugins (POSIX)
       if: ${{ runner.os != 'Windows' }}
       working-directory: build
-      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/plugin &&
-           cp lib/libcable.* ${{ matrix.tmpdir }}/mujoco_install/plugin
+      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/mujoco_plugin &&
+           cp lib/libelasticity.* ${{ matrix.tmpdir }}/mujoco_install/mujoco_plugin
     - name: Copy plugins (Windows)
       if: ${{ runner.os == 'Windows' }}
       working-directory: build
-      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/plugin &&
-           cp bin/Release/cable.dll ${{ matrix.tmpdir }}/mujoco_install/plugin
+      run: mkdir -p ${{ matrix.tmpdir }}/mujoco_install/mujoco_plugin &&
+           cp bin/Release/elasticity.dll ${{ matrix.tmpdir }}/mujoco_install/mujoco_plugin
     - name: Configure samples
       working-directory: sample
       run: >
@@ -193,7 +197,7 @@ jobs:
       run: >
         source ${{ matrix.tmpdir }}/venv/bin/activate &&
         MUJOCO_PATH="${{ matrix.tmpdir }}/mujoco_install"
-        MUJOCO_PLUGIN_PATH="${{ matrix.tmpdir }}/mujoco_install/plugin"
+        MUJOCO_PLUGIN_PATH="${{ matrix.tmpdir }}/mujoco_install/mujoco_plugin"
         MUJOCO_CMAKE_ARGS="-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=OFF ${{ matrix.cmake_args }}"
         pip wheel -v --no-deps mujoco-*.tar.gz
     - name: Install Python bindings

@@ -35,6 +35,8 @@
   #pragma warning (disable: 4305)  // disable MSVC warning: truncation from 'double' to 'float'
 #endif
 
+static const int MAX_ARRAY_SIZE = INT_MAX / 4;
+
 //------------------------------ mjLROpt -----------------------------------------------------------
 
 // set default options for length range computation
@@ -454,7 +456,7 @@ mjModel* mj_makeModel(int nq, int nv, int nu, int na, int nbody, int njnt,
   }
 
   // nmocap is going to get multiplied by 4, and shouldn't overflow
-  if (m->nmocap >= INT_MAX / 4) {
+  if (m->nmocap >= MAX_ARRAY_SIZE) {
     mju_free(m);
     mju_warning("Invalid model: nmocap too large");
     return 0;
@@ -1147,7 +1149,8 @@ static void _resetData(const mjModel* m, mjData* d, unsigned char debug_value) {
     d->plugin[i] = m->plugin[i];
     const mjpPlugin* plugin = mjp_getPluginAtSlot(m->plugin[i]);
     if (plugin->reset) {
-      plugin->reset(m, d, i);
+      plugin->reset(m, &d->plugin_state[m->plugin_stateadr[i]],
+                    (void*)(d->plugin_data[i]), i);
     }
   }
 }
@@ -1207,7 +1210,7 @@ void mj_deleteData(mjData* d) {
 const int nPOS[4] = {7, 4, 1, 1};
 const int nVEL[4] = {6, 3, 1, 1};
 
-static int sensorSize(mjtSensor sensor_type, int nuser_sensor) {
+static int sensorSize(mjtSensor sensor_type, int sensor_dim) {
   switch (sensor_type) {
   case mjSENS_TOUCH:
   case mjSENS_RANGEFINDER:
@@ -1252,7 +1255,7 @@ static int sensorSize(mjtSensor sensor_type, int nuser_sensor) {
     return 4;
 
   case mjSENS_USER:
-    return nuser_sensor;
+    return sensor_dim;
 
   case mjSENS_PLUGIN:
     return -1;
@@ -1367,6 +1370,7 @@ const char* mj_validateReferences(const mjModel* m) {
   X(pair_geom1,         npair,         ngeom        , 0                      ) \
   X(pair_geom2,         npair,         ngeom        , 0                      ) \
   X(actuator_plugin,    nu,            nplugin      , 0                      ) \
+  X(actuator_actadr,    nu,            na           , m->actuator_actnum     ) \
   X(sensor_plugin,      nsensor,       nplugin      , 0                      ) \
   X(plugin_stateadr,    nplugin,       npluginstate , m->plugin_statenum     ) \
   X(plugin_attradr,     nplugin,       npluginattr  , 0                      ) \
@@ -1404,6 +1408,9 @@ const char* mj_validateReferences(const mjModel* m) {
       int num = (nums ? nums[i] : 1);                         \
       if (num < 0) {                                          \
         return "Invalid model: " #numarray " is negative.";   \
+      }                                                       \
+      if (num > MAX_ARRAY_SIZE) {                             \
+        return "Invalid model: " #numarray " is too large.";  \
       }                                                       \
       int adrsmax = m->adrarray[i] + num;                     \
       if (adrsmax > m->ntarget || adrsmin < -1) {             \
@@ -1587,7 +1594,7 @@ const char* mj_validateReferences(const mjModel* m) {
       }
       sensor_size = plugin->nsensordata(m, m->sensor_plugin[i], i);
     } else {
-      sensor_size = sensorSize(sensor_type, m->nuser_sensor);
+      sensor_size = sensorSize(sensor_type, m->sensor_dim[i]);
     }
     if (sensor_size < 0) {
         return "Invalid model: Bad sensor_type.";

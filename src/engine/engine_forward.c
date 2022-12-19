@@ -155,7 +155,7 @@ void mj_fwdVelocity(const mjModel* m, mjData* d) {
 // (qpos, qvel, ctrl, act) => (qfrc_actuator, actuator_force, act_dot)
 void mj_fwdActuation(const mjModel* m, mjData* d) {
   TM_START;
-  int nv = m->nv, nu = m->nu, na = m->na;
+  int nv = m->nv, nu = m->nu;
   mjtNum gain, bias, tau;
   mjtNum *prm, *moment = d->actuator_moment, *force = d->actuator_force;
 
@@ -231,10 +231,11 @@ void mj_fwdActuation(const mjModel* m, mjData* d) {
     }
 
     // set force = gain .* [ctrl/act]
-    if (m->actuator_dyntype[i]==mjDYN_NONE) {
+    if (m->actuator_actadr[i] == -1) {
       force[i] = gain * ctrl[i];
     } else {
-      force[i] = gain * d->act[i-(nu-na)];
+      // use last activation variable associated with actuator i
+      force[i] = gain * d->act[m->actuator_actadr[i] + m->actuator_actnum[i] - 1];
     }
 
     // extract bias info
@@ -278,7 +279,7 @@ void mj_fwdActuation(const mjModel* m, mjData* d) {
       if (!plugin) {
         mju_error_i("invalid plugin slot: %d", slot);
       }
-      if (plugin->type & mjPLUGIN_ACTUATOR) {
+      if (plugin->capabilityflags & mjPLUGIN_ACTUATOR) {
         if (!plugin->compute) {
           mju_error_i("`compute` is a null function pointer for plugin at slot %d", slot);
         }
@@ -299,14 +300,18 @@ void mj_fwdActuation(const mjModel* m, mjData* d) {
   mju_mulMatTVec(d->qfrc_actuator, moment, force, nu, nv);
 
   // act_dot for stateful actuators
-  for (int i=nu-na; i<nu; i++) {
+  for (int i=0; i<nu; i++) {
     if (m->actuator_plugin[i] >= 0) {
+      continue;
+    }
+
+    int j = m->actuator_actadr[i];
+    if (j < 0) {
       continue;
     }
 
     // extract info
     prm = m->actuator_dynprm + i*mjNDYN;
-    int j = i-(nu-na);
 
     // compute act_dot according to dynamics type
     switch (m->actuator_dyntype[i]) {
@@ -325,7 +330,13 @@ void mj_fwdActuation(const mjModel* m, mjData* d) {
 
     default:                        // user dynamics
       if (mjcb_act_dyn) {
-        d->act_dot[j] = mjcb_act_dyn(m, d, i);
+        if (m->actuator_actnum[i] == 1) {
+          // scalar activation dynamics, get act_dot
+          d->act_dot[j] = mjcb_act_dyn(m, d, i);
+        } else {
+          // higher-order dynamics, mjcb_act_dyn writes into act_dot directly
+          mjcb_act_dyn(m, d, i);
+        }
       } else {
         d->act_dot[j] = 0;
       }
@@ -441,6 +452,7 @@ void mj_fwdConstraint(const mjModel* m, mjData* d) {
     mju_copy(d->qacc_warmstart, d->qacc_smooth, nv);
     mju_zero(d->qfrc_constraint, nv);
     d->solver_iter = 0;
+    TM_END(mjTIMER_CONSTRAINT);
     return;
   }
 
@@ -493,11 +505,13 @@ static void mj_advance(const mjModel* m, mjData* d,
     mju_addToScl(d->act, act_dot, m->opt.timestep, m->na);
 
     // clamp activations
-    for (int i=0; i<m->na; i++) {
-      int iu = i + m->nu - m->na;
-      if (m->actuator_actlimited[iu]) {
-        mjtNum* actrange = m->actuator_actrange + 2*iu;
-        d->act[i] = mju_clip(d->act[i], actrange[0], actrange[1]);
+    for (int i=0; i<m->nu; i++) {
+      int j = m->actuator_actadr[i];
+      if (j > -1 && m->actuator_actlimited[i]) {
+        mjtNum* actrange = m->actuator_actrange + 2*i;
+        for (int k=0; k<m->actuator_actnum[i]; k++) {
+          d->act[j+k] = mju_clip(d->act[j+k], actrange[0], actrange[1]);
+        }
       }
     }
   }
@@ -563,7 +577,8 @@ void mj_EulerSkip(const mjModel* m, mjData* d, int skipfactor) {
 
     // solve
     mju_add(qfrc, d->qfrc_smooth, d->qfrc_constraint, nv);
-    mj_solveLD(m, qacc, qfrc, 1, d->qH, d->qHDiagInv);
+    mju_copy(qacc, qfrc, m->nv);
+    mj_solveLD(m, qacc, 1, d->qH, d->qHDiagInv);
   }
 
   // advance state and time
@@ -719,7 +734,7 @@ void mj_implicitSkip(const mjModel *m, mjData *d, int skipfactor) {
   // advance state and time
   mj_advance(m, d, d->act_dot, qacc, NULL);
 
-  mjFREESTACK
+  mjFREESTACK;
 }
 
 
@@ -760,9 +775,31 @@ void mj_forwardSkip(const mjModel* m, mjData* d, int skipstage, int skipsensor) 
   }
 
   // acceleration-dependent
-  if (mjcb_control) {
-    mjcb_control(m, d);
-  }
+  if (!mjDISABLED(mjDSBL_ACTUATION)) {
+    // call legacy control callback if specified
+    if (mjcb_control) {
+      mjcb_control(m, d);
+    }
+
+    // handle control plugins
+    if (m->nplugin) {
+      const int nslot = mjp_pluginCount();
+      for (int i=0; i<m->nplugin; i++) {
+        const int slot = m->plugin[i];
+        const mjpPlugin* plugin = mjp_getPluginAtSlotUnsafe(slot, nslot);
+        if (!plugin) {
+          mju_error_i("invalid plugin slot: %d", slot);
+        }
+        if (plugin->capabilityflags & mjPLUGIN_CONTROL) {
+          if (!plugin->compute) {
+            mju_error_i("`compute` is a null function pointer for plugin at slot %d", slot);
+          }
+          plugin->compute(m, d, i, mjPLUGIN_CONTROL);
+        }
+      }
+    }
+}
+
   mj_fwdActuation(m, d);
   mj_fwdAcceleration(m, d);
   mj_fwdConstraint(m, d);

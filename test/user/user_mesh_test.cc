@@ -222,7 +222,9 @@ TEST_F(MjCMeshTest, MalformedFaceFails) {
   std::array<char, 1024> error;
   mjModel* model = mj_loadXML(xml_path.c_str(), 0, error.data(), error.size());
   EXPECT_THAT(model, testing::IsNull());
-  EXPECT_THAT(error.data(), HasSubstr("faces have inconsistent orientation"));
+  EXPECT_THAT(error.data(), HasSubstr(
+        "Error: faces of mesh 'malformed_face' have inconsistent orientation. "
+        "Please check the faces containing the vertices 1 and 2."));
 }
 
 TEST_F(MjCMeshTest, FlippedFaceFails) {
@@ -243,16 +245,23 @@ TEST_F(MjCMeshTest, FlippedFaceFails) {
   std::array<char, 1024> error;
   mjModel* model = LoadModelFromString(xml, error.data(), error.size());
   EXPECT_THAT(model, testing::IsNull());
-  EXPECT_THAT(error.data(), HasSubstr("faces have inconsistent orientation"));
+  EXPECT_THAT(error.data(), HasSubstr(
+        "Error: faces of mesh 'example_mesh' have inconsistent orientation. "
+        "Please check the faces containing the vertices 1 and 2."));
 }
 
 void CheckTetrahedronWasRescaled(mjModel* model) {
-  // the rotated and rescaled positions of the standard tetrahedron
-  mjtNum vert[] = {
-    -mju_sqrt(3)/4, 0., 0, mju_sqrt(3)/12, 0, mju_sqrt(6)/3, mju_sqrt(3)/12,
-    -mju_sqrt(2)/2, -mju_sqrt(6)/6, mju_sqrt(3)/12, mju_sqrt(2)/2, -mju_sqrt(6)/6};
-  for (int i=0; i<12; ++i) {
-    EXPECT_NEAR(model->mesh_vert[i], vert[i], std::numeric_limits<float>::epsilon());
+  // The rotated and rescaled positions of the tetrahedron
+  // with vertices (0, 0, 0), (1, 0, 0), (0, 2, 0), (0, 0, 3)
+  // after mesh preprocessing is performed
+  std::vector<mjtNum> vert = {
+    -0.51610732078552246,  -0.57402724027633667, -0.5283237099647522,
+     0.42337465286254883,  -0.90627568960189819, -0.61189728975296021,
+     0.065528042614459991,  1.2306677103042603,  -1.1645441055297852,
+     0.027204651385545731,  0.24963514506816864,  2.3047652244567871};
+  mjtNum tolerance = std::numeric_limits<float>::epsilon();
+  for (int i=0; i < 12; ++i) {
+    EXPECT_NEAR(model->mesh_vert[i], vert[i], tolerance);
   }
 }
 
@@ -261,7 +270,7 @@ TEST_F(MjCMeshTest, FlippedFaceAllowedWorld) {
   <mujoco>
     <asset>
       <mesh name="example_mesh"
-        vertex="0 0 0  1 0 0  0 1 0  0 0 1"
+        vertex="0 0 0  1 0 0  0 2 0  0 0 3"
         face="2 0 3  0 1 3  1 2 3  0 1 2" />
     </asset>
     <worldbody>
@@ -281,7 +290,7 @@ TEST_F(MjCMeshTest, FlippedFaceAllowedNoMass) {
   <mujoco>
     <asset>
       <mesh name="example_mesh"
-        vertex="0 0 0  1 0 0  0 1 0  0 0 1"
+        vertex="0 0 0  1 0 0  0 2 0  0 0 3"
         face="2 0 3  0 1 3  1 2 3  0 1 2" />
     </asset>
     <worldbody>
@@ -303,7 +312,7 @@ TEST_F(MjCMeshTest, FlippedFaceAllowedInertial) {
   <mujoco>
     <asset>
       <mesh name="example_mesh"
-        vertex="0 0 0  1 0 0  0 1 0  0 0 1"
+        vertex="0 0 0  1 0 0  0 2 0  0 0 3"
         face="2 0 3  0 1 3  1 2 3  0 1 2" />
     </asset>
     <worldbody>
@@ -326,7 +335,7 @@ TEST_F(MjCMeshTest, FlippedFaceAllowedNegligibleArea) {
   <mujoco>
     <asset>
       <mesh name="example_mesh"
-        vertex="0 0 0  1 0 0  0 1 0  0 0 1  0 0 1"
+        vertex="0 0 0  1 0 0  0 2 0  0 0 3  0 0 3"
         face="2 0 3  0 1 3  1 2 3  0 2 1  0 3 4" />
     </asset>
     <worldbody>
