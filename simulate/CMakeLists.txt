@@ -156,6 +156,7 @@ if(SIMULATE_BUILD_EXECUTABLE)
   target_link_libraries(
     simulate
     libsimulate
+    elasticity
     mujoco::mujoco
     glfw
     Threads::Threads
