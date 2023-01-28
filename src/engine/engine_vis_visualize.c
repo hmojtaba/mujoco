@@ -1794,6 +1794,11 @@ void mjv_updateCamera(const mjModel* m, mjData* d, mjvCamera* cam, mjvScene* scn
       // smooth tracking of subtree com
       const mjtNum scl_vec[3] = {0.5,0.5,0.1};
       mju_sub3(move, d->subtree_com + 3*cam->trackbodyid, cam->lookat);
+      static mjtNum avg_vel[2] = {0, 0};
+      for (int i = 0; i < 2; ++i) {
+        avg_vel[i] += 0.1 * ((d->cvel + 6*cam->trackbodyid+3)[i] - avg_vel[i]);
+        move[i] += fmin(fmax(-0.8, avg_vel[i] * 0.25), 0.8); // todo: mojtaba, remove static avg_vel, make it possible to set the config parameters of forward tracking
+      }
       mju_addToSclExp3(cam->lookat, move, scl_vec);
     }
 
