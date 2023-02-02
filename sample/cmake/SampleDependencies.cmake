@@ -59,7 +59,7 @@ findorfetch(
 )
 
 option(MUJOCO_EXTRAS_STATIC_GLFW
-       "Link MuJoCo sample apps and simulate libraries against GLFW statically." ON
+       "Link MuJoCo sample apps and simulate libraries against GLFW statically." OFF
 )
 if(MUJOCO_EXTRAS_STATIC_GLFW)
   set(BUILD_SHARED_LIBS_OLD ${BUILD_SHARED_LIBS})
